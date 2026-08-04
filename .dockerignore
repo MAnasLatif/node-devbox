@@ -1,0 +1,8 @@
+.git
+.github
+.devcontainer
+.vscode
+node_modules
+*.md
+docker-compose.yml
+.DS_Store

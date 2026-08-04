@@ -1,0 +1,5 @@
+{
+    // Keep the host's main GitHub account from leaking into the container
+    "dev.containers.copyGitConfig": false,
+    "dev.containers.gitCredentialHelperConfigLocation": "none"
+}

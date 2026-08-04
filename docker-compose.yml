@@ -1,0 +1,27 @@
+services:
+  devbox:
+    image: ${DEVBOX_IMAGE:-ghcr.io/manaslatif/node-devbox:latest}
+    pull_policy: always
+    hostname: ${DEVBOX_HOSTNAME:-devbox}
+    user: developer
+    init: true
+    restart: unless-stopped
+    command: sleep infinity
+    working_dir: /workspace
+    environment:
+      GH_CONFIG_DIR: /home/developer/.config/gh
+      TZ: ${TZ:-UTC}
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+      - type: volume
+        source: devbox_home
+        target: /home/developer
+    ports:
+      - "${DEVBOX_PORT_3000:-3000}:3000"
+      - "${DEVBOX_PORT_5173:-5173}:5173"
+      - "${DEVBOX_PORT_8080:-8080}:8080"
+
+volumes:
+  devbox_home:

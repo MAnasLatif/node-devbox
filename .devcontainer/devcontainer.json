@@ -1,0 +1,25 @@
+{
+    "name": "Node Devbox",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "devbox",
+    "workspaceFolder": "/workspace",
+    "remoteUser": "developer",
+    "shutdownAction": "none",
+    "overrideCommand": false,
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "git.terminalAuthentication": false,
+                "github.gitAuthentication": false
+            },
+            "extensions": [
+                "GitHub.vscode-pull-request-github",
+                "dbaeumer.vscode-eslint",
+                "esbenp.prettier-vscode",
+                "eamodio.gitlens"
+            ]
+        }
+    },
+    "postAttachCommand": "gh auth status || echo 'Run dev-account to sign in'"
+}
