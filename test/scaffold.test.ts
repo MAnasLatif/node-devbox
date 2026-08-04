@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 import {
   CliError,
@@ -13,6 +16,9 @@ import {
   parseArguments,
   promptForMissingOptions,
 } from "../src/scaffold.js";
+
+const execFileAsync = promisify(execFile);
+const devAccountPath = fileURLToPath(new URL("../../scripts/dev-account.sh", import.meta.url));
 
 async function withTemporaryDirectory(callback: (directory: string) => Promise<void>): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "node-devbox-test-"));
@@ -50,6 +56,67 @@ test("detects the system timezone and safely falls back to UTC", () => {
     }),
     "UTC",
   );
+});
+
+test("configures Git identity from GitHub without prompting", async () => {
+  await withTemporaryDirectory(async (directory) => {
+    const binDirectory = join(directory, "bin");
+    const ghAuthState = join(directory, "gh-authenticated");
+    const gitLog = join(directory, "git.log");
+    await mkdir(binDirectory);
+    await writeFile(
+      join(binDirectory, "gh"),
+      `#!/bin/sh
+if [ "$1 $2" = "auth status" ]; then
+  if [ -f "$GH_AUTH_STATE" ]; then
+    echo "Logged in to github.com as octocat"
+  else
+    exit 1
+  fi
+elif [ "$1 $2" = "auth login" ]; then
+  touch "$GH_AUTH_STATE"
+elif [ "$1 $2" = "auth setup-git" ]; then
+  exit 0
+elif [ "$1 $2" = "api user" ]; then
+  printf '%s\\n' '{"login":"octocat","email":null}'
+else
+  exit 1
+fi
+`,
+      { mode: 0o755 },
+    );
+    await writeFile(
+      join(binDirectory, "git"),
+      `#!/bin/sh
+printf '%s\\n' "$*" >> "$GIT_LOG"
+if [ "$1 $2 $3" = "config --global --get" ]; then
+  if [ "$4" = "user.name" ]; then
+    echo octocat
+  elif [ "$4" = "user.email" ]; then
+    echo octocat@users.noreply.github.com
+  fi
+fi
+`,
+      { mode: 0o755 },
+    );
+
+    const { stderr, stdout } = await execFileAsync("/bin/bash", [devAccountPath], {
+      env: {
+        ...process.env,
+        GH_AUTH_STATE: ghAuthState,
+        GIT_LOG: gitLog,
+        PATH: `${binDirectory}:${process.env.PATH ?? ""}`,
+      },
+    });
+    const commands = await readFile(gitLog, "utf8");
+
+    assert.match(commands, /^config --global user\.name octocat$/m);
+    assert.match(commands, /^config --global user\.email octocat@users\.noreply\.github\.com$/m);
+    assert.match(commands, /^config --global init\.defaultBranch main$/m);
+    assert.match(stdout, /Git user:  octocat/);
+    assert.match(stdout, /Git email: octocat@users\.noreply\.github\.com/);
+    assert.doesNotMatch(`${stdout}${stderr}`, /git user\.(?:name|email)\s+\[/);
+  });
 });
 
 test("accepts explicit workspace modes and rejects conflicting choices", () => {

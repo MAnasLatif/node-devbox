@@ -37,8 +37,10 @@ docker compose exec devbox dev-account
 docker compose exec devbox bash
 ```
 
-`dev-account` opens GitHub's browser login, configures Git HTTPS credentials,
-and asks for the commit name and email used only by this devbox. Inside the
+`dev-account` opens GitHub's browser login and configures Git HTTPS credentials.
+It automatically sets `git user.name` to the authenticated GitHub username and
+uses the account's public email, or its GitHub noreply address when the email is
+private. It does not prompt separately for the Git name or email. Inside the
 shell, `/workspace` is initially empty:
 
 ```bash

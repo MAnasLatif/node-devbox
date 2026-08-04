@@ -18,19 +18,20 @@ fi
 
 gh auth setup-git --hostname github.com
 
-login_name="$(gh api user --jq .login)"
-default_email="$(gh api user --jq '.email // empty')"
-noreply_email="${login_name}@users.noreply.github.com"
+account="$(gh api user)"
+login_name="$(jq -r '.login' <<< "${account}")"
+git_email="$(jq -r '.email // empty' <<< "${account}")"
 
-read -r -p "git user.name  [${login_name}]: " git_name
-read -r -p "git user.email [${default_email:-${noreply_email}}]: " git_email
+if [[ -z "${git_email}" ]]; then
+    git_email="${login_name}@users.noreply.github.com"
+fi
 
-git config --global user.name "${git_name:-${login_name}}"
-git config --global user.email "${git_email:-${default_email:-${noreply_email}}}"
+git config --global user.name "${login_name}"
+git config --global user.email "${git_email}"
 git config --global init.defaultBranch main
 
 echo
 echo "==> Done. This account is now in use:"
 gh auth status --hostname github.com
-git config --global --get user.name
-git config --global --get user.email
+echo "Git user:  $(git config --global --get user.name)"
+echo "Git email: $(git config --global --get user.email)"
