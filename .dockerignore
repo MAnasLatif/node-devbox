@@ -2,11 +2,12 @@
 .github
 .devcontainer
 .vscode
-bin
-lib
+dist
+src
 test
 node_modules
 package*.json
+tsconfig.json
 *.md
 docker-compose.yml
 .gitignore

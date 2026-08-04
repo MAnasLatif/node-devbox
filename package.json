@@ -1,21 +1,24 @@
 {
   "name": "node-devbox",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Create isolated Node.js development environments with Docker Compose.",
   "type": "module",
   "bin": {
-    "node-devbox": "bin/node-devbox.js"
+    "node-devbox": "dist/src/node-devbox.js"
   },
   "files": [
-    "bin",
-    "lib",
+    "dist/src",
+    "src",
+    "tsconfig.json",
     "docker-compose.yml",
     "LICENSE",
     "README.md"
   ],
   "scripts": {
-    "test": "node --test",
+    "build": "tsc --build --clean tsconfig.json && tsc --build tsconfig.json",
+    "test": "npm run build && node --test dist/test/scaffold.test.js",
     "check": "npm test && npm pack --dry-run",
+    "prepack": "npm run build",
     "prepublishOnly": "npm test"
   },
   "engines": {
@@ -44,5 +47,9 @@
   "homepage": "https://github.com/MAnasLatif/node-devbox#readme",
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2"
   }
 }

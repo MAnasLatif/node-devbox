@@ -1,4 +1,5 @@
 node_modules/
+dist/
 coverage/
 node-devbox-*.tgz
 .DS_Store

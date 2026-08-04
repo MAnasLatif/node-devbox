@@ -3,15 +3,20 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { CliError, createDevbox, parseArguments, usage } from "../lib/scaffold.js";
+import { CliError, createDevbox, parseArguments, usage } from "./scaffold.js";
 
-const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
-
-async function getVersion() {
-  return JSON.parse(await readFile(packageJsonPath, "utf8")).version;
+interface PackageJson {
+  version: string;
 }
 
-async function main() {
+const packageJsonPath = fileURLToPath(new URL("../../package.json", import.meta.url));
+
+async function getVersion(): Promise<string> {
+  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as PackageJson;
+  return packageJson.version;
+}
+
+async function main(): Promise<void> {
   const options = parseArguments(process.argv.slice(2));
 
   if (options.help) {
@@ -39,13 +44,14 @@ async function main() {
   process.stdout.write("  docker compose exec devbox bash\n");
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   if (error instanceof CliError) {
     process.stderr.write(`Error: ${error.message}\n\n${usage}`);
     process.exitCode = 1;
     return;
   }
 
-  process.stderr.write(`${error.stack ?? error.message}\n`);
+  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  process.stderr.write(`${message}\n`);
   process.exitCode = 1;
 });

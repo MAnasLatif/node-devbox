@@ -1,10 +1,44 @@
+import { spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 
-const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+const supportedPorts = [3000, 5173, 8080] as const;
+
+export type ContainerPort = (typeof supportedPorts)[number];
+export type PortMap = Record<ContainerPort, number>;
+
+export interface ParsedArguments {
+  cwd: string;
+  force: boolean;
+  help: boolean;
+  name?: string;
+  ports: Partial<Record<ContainerPort, string>>;
+  start: boolean;
+  target: string;
+  timezone: string;
+  version: boolean;
+}
+
+export interface CreateDevboxOptions {
+  cwd?: string;
+  force?: boolean;
+  name?: string;
+  ports?: Partial<Record<ContainerPort, number | string>>;
+  start?: boolean;
+  target: string;
+  timezone?: string;
+}
+
+export interface CreateDevboxResult {
+  ports: PortMap;
+  projectName: string;
+  relativeTarget: string;
+  targetDirectory: string;
+}
+
+const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
 const composeSourcePath = resolve(packageRoot, "docker-compose.yml");
 const managedFiles = [
   ".devcontainer/devcontainer.json",
@@ -36,7 +70,7 @@ Examples:
   npx node-devbox . --port-3000 3000
 `;
 
-function takeValue(argumentsList, index, option) {
+function takeValue(argumentsList: readonly string[], index: number, option: string): string {
   const value = argumentsList[index + 1];
   if (!value || value.startsWith("-")) {
     throw new CliError(`${option} requires a value.`);
@@ -44,20 +78,24 @@ function takeValue(argumentsList, index, option) {
   return value;
 }
 
-export function parseArguments(argumentsList) {
-  const options = {
+export function parseArguments(argumentsList: readonly string[]): ParsedArguments {
+  const options: ParsedArguments = {
     cwd: process.cwd(),
     force: false,
     help: false,
     ports: {},
     start: false,
+    target: "",
     timezone: "UTC",
     version: false,
   };
-  const positional = [];
+  const positional: string[] = [];
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
+    if (!argument) {
+      continue;
+    }
 
     if (argument === "-h" || argument === "--help") {
       options.help = true;
@@ -74,7 +112,7 @@ export function parseArguments(argumentsList) {
       options.timezone = takeValue(argumentsList, index, argument);
       index += 1;
     } else if (/^--port-(3000|5173|8080)$/.test(argument)) {
-      const containerPort = Number(argument.slice("--port-".length));
+      const containerPort = Number(argument.slice("--port-".length)) as ContainerPort;
       options.ports[containerPort] = takeValue(argumentsList, index, argument);
       index += 1;
     } else if (argument.startsWith("-")) {
@@ -91,13 +129,13 @@ export function parseArguments(argumentsList) {
     if (positional.length > 1) {
       throw new CliError("Provide only one folder name.");
     }
-    options.target = positional[0];
+    options.target = positional[0] ?? "";
   }
 
   return options;
 }
 
-export function normalizeProjectName(value) {
+export function normalizeProjectName(value: string): string {
   const normalized = value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -114,21 +152,21 @@ export function normalizeProjectName(value) {
   return normalized;
 }
 
-function projectNameFromTarget(targetDirectory) {
+function projectNameFromTarget(targetDirectory: string): string {
   const segments = targetDirectory.split(sep).filter(Boolean);
   return segments.at(-1) ?? "node-devbox";
 }
 
-function hashProjectName(projectName) {
+function hashProjectName(projectName: string): number {
   let hash = 2166136261;
   for (const character of projectName) {
-    hash ^= character.codePointAt(0);
+    hash ^= character.codePointAt(0) ?? 0;
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
 }
 
-export function derivePorts(projectName) {
+export function derivePorts(projectName: string): PortMap {
   const slot = hashProjectName(projectName) % 8000;
   return {
     3000: 20000 + slot,
@@ -137,7 +175,7 @@ export function derivePorts(projectName) {
   };
 }
 
-function validatePort(value, option) {
+function validatePort(value: number | string, option: string): number {
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new CliError(`${option} must be an integer from 1 to 65535.`);
@@ -145,14 +183,14 @@ function validatePort(value, option) {
   return port;
 }
 
-function validateTimezone(value) {
+function validateTimezone(value: string): string {
   if (!/^[A-Za-z0-9_+/-]+$/.test(value)) {
     throw new CliError("The timezone contains unsupported characters.");
   }
   return value;
 }
 
-async function exists(path) {
+async function exists(path: string): Promise<boolean> {
   try {
     await access(path, constants.F_OK);
     return true;
@@ -161,7 +199,7 @@ async function exists(path) {
   }
 }
 
-async function prepareTarget(targetDirectory, force) {
+async function prepareTarget(targetDirectory: string, force: boolean): Promise<void> {
   if (await exists(targetDirectory)) {
     if (!(await stat(targetDirectory)).isDirectory()) {
       throw new CliError(`Target is not a directory: ${targetDirectory}`);
@@ -171,7 +209,7 @@ async function prepareTarget(targetDirectory, force) {
   }
 
   if (!force) {
-    const conflicts = [];
+    const conflicts: string[] = [];
     for (const managedFile of managedFiles) {
       if (await exists(resolve(targetDirectory, managedFile))) {
         conflicts.push(managedFile);
@@ -185,7 +223,7 @@ async function prepareTarget(targetDirectory, force) {
   }
 }
 
-function createEnvironment(projectName, timezone, ports) {
+function createEnvironment(projectName: string, timezone: string, ports: PortMap): string {
   return [
     `COMPOSE_PROJECT_NAME=${projectName}`,
     `DEVBOX_HOSTNAME=${projectName}-devbox`,
@@ -197,7 +235,7 @@ function createEnvironment(projectName, timezone, ports) {
   ].join("\n");
 }
 
-function createDevcontainer(projectName) {
+function createDevcontainer(projectName: string): string {
   return `${JSON.stringify(
     {
       name: `Node Devbox: ${projectName}`,
@@ -229,7 +267,7 @@ function createDevcontainer(projectName) {
   )}\n`;
 }
 
-function createVscodeSettings() {
+function createVscodeSettings(): string {
   return `${JSON.stringify(
     {
       "dev.containers.copyGitConfig": false,
@@ -240,14 +278,19 @@ function createVscodeSettings() {
   )}\n`;
 }
 
-async function writeManagedFile(targetDirectory, relativePath, contents, force) {
+async function writeManagedFile(
+  targetDirectory: string,
+  relativePath: string,
+  contents: string,
+  force: boolean,
+): Promise<void> {
   const destination = resolve(targetDirectory, relativePath);
   await mkdir(dirname(destination), { recursive: true });
   await writeFile(destination, contents, { encoding: "utf8", flag: force ? "w" : "wx" });
 }
 
-async function startDevbox(targetDirectory) {
-  await new Promise((resolvePromise, reject) => {
+async function startDevbox(targetDirectory: string): Promise<void> {
+  await new Promise<void>((resolvePromise, reject) => {
     const child = spawn("docker", ["compose", "up", "-d"], {
       cwd: targetDirectory,
       stdio: "inherit",
@@ -263,12 +306,16 @@ async function startDevbox(targetDirectory) {
   });
 }
 
-export async function createDevbox(options) {
+export async function createDevbox(options: CreateDevboxOptions): Promise<CreateDevboxResult> {
+  if (!options.target) {
+    throw new CliError("Provide a folder name.");
+  }
+
   const cwd = resolve(options.cwd ?? process.cwd());
   const targetDirectory = resolve(cwd, options.target);
   const projectName = normalizeProjectName(options.name ?? projectNameFromTarget(targetDirectory));
   const defaultPorts = derivePorts(projectName);
-  const ports = {
+  const ports: PortMap = {
     3000: validatePort(options.ports?.[3000] ?? defaultPorts[3000], "--port-3000"),
     5173: validatePort(options.ports?.[5173] ?? defaultPorts[5173], "--port-5173"),
     8080: validatePort(options.ports?.[8080] ?? defaultPorts[8080], "--port-8080"),
@@ -279,27 +326,28 @@ export async function createDevbox(options) {
   }
 
   const timezone = validateTimezone(options.timezone ?? "UTC");
-  await prepareTarget(targetDirectory, options.force ?? false);
+  const force = options.force ?? false;
+  await prepareTarget(targetDirectory, force);
 
   const composeContents = await readFile(composeSourcePath, "utf8");
-  await writeManagedFile(targetDirectory, "docker-compose.yml", composeContents, options.force);
+  await writeManagedFile(targetDirectory, "docker-compose.yml", composeContents, force);
   await writeManagedFile(
     targetDirectory,
     ".env",
     createEnvironment(projectName, timezone, ports),
-    options.force,
+    force,
   );
   await writeManagedFile(
     targetDirectory,
     ".devcontainer/devcontainer.json",
     createDevcontainer(projectName),
-    options.force,
+    force,
   );
   await writeManagedFile(
     targetDirectory,
     ".vscode/settings.json",
     createVscodeSettings(),
-    options.force,
+    force,
   );
 
   if (options.start) {

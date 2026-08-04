@@ -15,6 +15,9 @@ The command creates `my-project`, adds the complete Docker Compose and VS Code
 Dev Container setup, and assigns an explicit project name and stable host ports.
 No global npm installation, repository clone, or local image build is required.
 
+The CLI and its tests are written in strict TypeScript. npm runs the compiled
+ES module from `dist/`, so users do not need TypeScript installed globally.
+
 Container image: `ghcr.io/manaslatif/node-devbox:latest`
 
 ## Quick start

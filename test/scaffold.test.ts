@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "node:test";
 
 import {
   CliError,
@@ -10,9 +10,9 @@ import {
   derivePorts,
   normalizeProjectName,
   parseArguments,
-} from "../lib/scaffold.js";
+} from "../src/scaffold.js";
 
-async function withTemporaryDirectory(callback) {
+async function withTemporaryDirectory(callback: (directory: string) => Promise<void>): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "node-devbox-test-"));
   try {
     await callback(directory);
@@ -54,7 +54,7 @@ test("creates complete, isolated setups for multiple projects", async () => {
     const compose = await readFile(join(alpha.targetDirectory, "docker-compose.yml"), "utf8");
     const devcontainer = JSON.parse(
       await readFile(join(alpha.targetDirectory, ".devcontainer/devcontainer.json"), "utf8"),
-    );
+    ) as { name: string; workspaceFolder: string };
 
     assert.match(alphaEnvironment, /^COMPOSE_PROJECT_NAME=alpha-project$/m);
     assert.match(betaEnvironment, /^COMPOSE_PROJECT_NAME=beta-project$/m);

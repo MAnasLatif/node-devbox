@@ -8,6 +8,7 @@ Requirements:
 
 - Node.js 20.10 or newer
 - Docker with Docker Compose v2
+- TypeScript is installed through the project's npm development dependencies
 
 Clone the repository and run the checks:
 
@@ -15,6 +16,7 @@ Clone the repository and run the checks:
 git clone https://github.com/MAnasLatif/node-devbox.git
 cd node-devbox
 npm install
+npm run build
 npm test
 npm pack --dry-run
 docker compose config --quiet
@@ -23,7 +25,8 @@ docker compose config --quiet
 To exercise the CLI without publishing it:
 
 ```bash
-node ./bin/node-devbox.js /tmp/example-devbox
+npm run build
+node ./dist/src/node-devbox.js /tmp/example-devbox
 docker compose -f /tmp/example-devbox/docker-compose.yml config --quiet
 ```
 
