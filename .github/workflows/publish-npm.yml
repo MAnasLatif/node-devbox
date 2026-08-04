@@ -36,5 +36,16 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Check package version
+        id: package
+        run: |
+          package_version="$(node --input-type=module -e "import packageJson from './package.json' with { type: 'json' }; process.stdout.write(packageJson.version)")"
+          if npm view "node-devbox@${package_version}" version >/dev/null 2>&1; then
+            echo "publish=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "publish=true" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Publish package
+        if: steps.package.outputs.publish == 'true'
         run: npm publish --access public --provenance
