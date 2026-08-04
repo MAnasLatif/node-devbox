@@ -20,6 +20,7 @@ export interface ParsedArguments {
   target: string;
   timezone: string;
   version: boolean;
+  workspace?: string | false;
 }
 
 export interface CreateDevboxOptions {
@@ -30,6 +31,7 @@ export interface CreateDevboxOptions {
   start?: boolean;
   target: string;
   timezone?: string;
+  workspace?: string | false;
 }
 
 export interface CreateDevboxResult {
@@ -38,7 +40,11 @@ export interface CreateDevboxResult {
   relativeTarget: string;
   targetDirectory: string;
   timezone: string;
+  workspaceSource: string;
+  workspaceType: "bind" | "volume";
 }
+
+export type Prompt = (question: string) => Promise<string>;
 
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
 const composeSourcePath = resolve(packageRoot, "docker-compose.yml");
@@ -51,9 +57,9 @@ const managedFiles = [
 
 export class CliError extends Error {}
 
-export const usage = `Usage: node-devbox <folder-name> [options]
+export const usage = `Usage: node-devbox [folder-name] [options]
 
-Create an isolated Node.js development environment in a new or existing folder.
+Create an isolated Node.js development environment with an empty workspace.
 
 Options:
   --name <name>       Set the Docker Compose project name
@@ -61,6 +67,9 @@ Options:
   --port-5173 <port>  Set the host port mapped to container port 5173
   --port-8080 <port>  Set the host port mapped to container port 8080
   --timezone <zone>   Override the detected system timezone
+  --workspace <path> Mount a host folder at /workspace
+  --no-workspace-mount
+                      Store /workspace in a Docker volume
   --start             Start the devbox after creating it
   --force             Replace files previously managed by Node Devbox
   -h, --help          Show help
@@ -68,6 +77,8 @@ Options:
 
 Examples:
   npx node-devbox my-project
+  npx node-devbox my-project --workspace ../my-app
+  npx node-devbox my-project --no-workspace-mount
   npx node-devbox client-work --name client-work
   npx node-devbox . --port-3000 3000
 `;
@@ -116,6 +127,17 @@ export function parseArguments(
     } else if (argument === "--timezone" || argument === "--tz") {
       options.timezone = takeValue(argumentsList, index, argument);
       index += 1;
+    } else if (argument === "--workspace") {
+      if (options.workspace !== undefined) {
+        throw new CliError("Choose only one workspace mount option.");
+      }
+      options.workspace = takeValue(argumentsList, index, argument);
+      index += 1;
+    } else if (argument === "--no-workspace-mount") {
+      if (options.workspace !== undefined) {
+        throw new CliError("Choose only one workspace mount option.");
+      }
+      options.workspace = false;
     } else if (/^--port-(3000|5173|8080)$/.test(argument)) {
       const containerPort = Number(argument.slice("--port-".length)) as ContainerPort;
       options.ports[containerPort] = takeValue(argumentsList, index, argument);
@@ -128,9 +150,6 @@ export function parseArguments(
   }
 
   if (!options.help && !options.version) {
-    if (positional.length === 0) {
-      throw new CliError("Provide a folder name.");
-    }
     if (positional.length > 1) {
       throw new CliError("Provide only one folder name.");
     }
@@ -138,6 +157,43 @@ export function parseArguments(
   }
 
   return options;
+}
+
+export async function promptForMissingOptions(
+  options: ParsedArguments,
+  prompt: Prompt,
+): Promise<ParsedArguments> {
+  let target = options.target.trim();
+  while (!target) {
+    target = (await prompt("Devbox setup folder: ")).trim();
+  }
+
+  let workspace = options.workspace;
+  if (workspace === undefined) {
+    let mountWorkspace: boolean | undefined;
+    while (mountWorkspace === undefined) {
+      const answer = (await prompt("Mount a host folder at /workspace? [y/N] "))
+        .trim()
+        .toLowerCase();
+      if (!answer || answer === "n" || answer === "no") {
+        mountWorkspace = false;
+      } else if (answer === "y" || answer === "yes") {
+        mountWorkspace = true;
+      }
+    }
+
+    if (mountWorkspace) {
+      const defaultWorkspace = resolve(options.cwd, target, "workspace");
+      const answer = (
+        await prompt(`Host workspace folder [${defaultWorkspace}]: `)
+      ).trim();
+      workspace = answer || defaultWorkspace;
+    } else {
+      workspace = false;
+    }
+  }
+
+  return { ...options, target, workspace };
 }
 
 export function normalizeProjectName(value: string): string {
@@ -240,11 +296,17 @@ async function prepareTarget(targetDirectory: string, force: boolean): Promise<v
   }
 }
 
-function createEnvironment(projectName: string, timezone: string, ports: PortMap): string {
+function createEnvironment(
+  projectName: string,
+  timezone: string,
+  ports: PortMap,
+  workspaceSource: string,
+): string {
   return [
     `COMPOSE_PROJECT_NAME=${projectName}`,
     `DEVBOX_HOSTNAME=${projectName}-devbox`,
     `TZ=${timezone}`,
+    `DEVBOX_WORKSPACE_SOURCE=${JSON.stringify(workspaceSource)}`,
     `DEVBOX_PORT_3000=${ports[3000]}`,
     `DEVBOX_PORT_5173=${ports[5173]}`,
     `DEVBOX_PORT_8080=${ports[8080]}`,
@@ -268,12 +330,6 @@ function createDevcontainer(projectName: string): string {
             "terminal.integrated.defaultProfile.linux": "bash",
             "git.terminalAuthentication": false,
             "github.gitAuthentication": false,
-            "files.exclude": {
-              ".devcontainer": true,
-              ".vscode": true,
-              ".env": true,
-              "docker-compose.yml": true,
-            },
           },
           extensions: [
             "GitHub.vscode-pull-request-github",
@@ -329,6 +385,25 @@ async function startDevbox(targetDirectory: string): Promise<void> {
   });
 }
 
+function containsPath(parent: string, child: string): boolean {
+  const childPath = relative(parent, child);
+  return (
+    childPath === "" ||
+    (childPath !== ".." && !childPath.startsWith(`..${sep}`) && !isAbsolute(childPath))
+  );
+}
+
+async function prepareWorkspace(workspaceDirectory: string): Promise<void> {
+  if (await exists(workspaceDirectory)) {
+    if (!(await stat(workspaceDirectory)).isDirectory()) {
+      throw new CliError(`Workspace is not a directory: ${workspaceDirectory}`);
+    }
+    return;
+  }
+
+  await mkdir(workspaceDirectory, { recursive: true });
+}
+
 export async function createDevbox(options: CreateDevboxOptions): Promise<CreateDevboxResult> {
   if (!options.target) {
     throw new CliError("Provide a folder name.");
@@ -337,6 +412,16 @@ export async function createDevbox(options: CreateDevboxOptions): Promise<Create
   const cwd = resolve(options.cwd ?? process.cwd());
   const targetDirectory = resolve(cwd, options.target);
   const projectName = normalizeProjectName(options.name ?? projectNameFromTarget(targetDirectory));
+  const workspaceType = typeof options.workspace === "string" ? "bind" : "volume";
+  const workspaceSource =
+    workspaceType === "bind" ? resolve(cwd, options.workspace || "") : "devbox_workspace";
+
+  if (workspaceType === "bind" && containsPath(workspaceSource, targetDirectory)) {
+    throw new CliError(
+      "The workspace folder cannot contain the Devbox setup folder. Choose separate folders.",
+    );
+  }
+
   const defaultPorts = derivePorts(projectName);
   const ports: PortMap = {
     3000: validatePort(options.ports?.[3000] ?? defaultPorts[3000], "--port-3000"),
@@ -351,13 +436,16 @@ export async function createDevbox(options: CreateDevboxOptions): Promise<Create
   const timezone = validateTimezone(options.timezone ?? detectSystemTimezone());
   const force = options.force ?? false;
   await prepareTarget(targetDirectory, force);
+  if (workspaceType === "bind") {
+    await prepareWorkspace(workspaceSource);
+  }
 
   const composeContents = await readFile(composeSourcePath, "utf8");
   await writeManagedFile(targetDirectory, "docker-compose.yml", composeContents, force);
   await writeManagedFile(
     targetDirectory,
     ".env",
-    createEnvironment(projectName, timezone, ports),
+    createEnvironment(projectName, timezone, ports, workspaceSource),
     force,
   );
   await writeManagedFile(
@@ -384,5 +472,7 @@ export async function createDevbox(options: CreateDevboxOptions): Promise<Create
     relativeTarget: isAbsolute(options.target) ? targetDirectory : relativeTarget,
     targetDirectory,
     timezone,
+    workspaceSource,
+    workspaceType,
   };
 }

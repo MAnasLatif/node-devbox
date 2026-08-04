@@ -12,9 +12,7 @@ services:
       GH_CONFIG_DIR: /home/developer/.config/gh
       TZ: ${TZ:-UTC}
     volumes:
-      - type: bind
-        source: .
-        target: /workspace
+      - "${DEVBOX_WORKSPACE_SOURCE:-devbox_workspace}:/workspace"
       - type: volume
         source: devbox_home
         target: /home/developer
@@ -25,3 +23,4 @@ services:
 
 volumes:
   devbox_home:
+  devbox_workspace:

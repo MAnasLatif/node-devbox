@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -11,6 +11,7 @@ import {
   derivePorts,
   normalizeProjectName,
   parseArguments,
+  promptForMissingOptions,
 } from "../src/scaffold.js";
 
 async function withTemporaryDirectory(callback: (directory: string) => Promise<void>): Promise<void> {
@@ -51,6 +52,33 @@ test("detects the system timezone and safely falls back to UTC", () => {
   );
 });
 
+test("accepts explicit workspace modes and rejects conflicting choices", () => {
+  assert.equal(parseArguments(["box", "--workspace", "../app"]).workspace, "../app");
+  assert.equal(parseArguments(["box", "--no-workspace-mount"]).workspace, false);
+  assert.throws(
+    () => parseArguments(["box", "--workspace", "../app", "--no-workspace-mount"]),
+    /Choose only one workspace mount option/,
+  );
+});
+
+test("prompts for a missing setup folder and workspace choice", async () => {
+  const answers = ["client-box", "yes", ""];
+  const questions: string[] = [];
+  const options = await promptForMissingOptions(parseArguments([]), async (question) => {
+    questions.push(question);
+    return answers.shift() ?? "";
+  });
+
+  assert.equal(options.target, "client-box");
+  assert.equal(options.workspace, join(process.cwd(), "client-box", "workspace"));
+  assert.equal(questions.length, 3);
+
+  const volumeOptions = await promptForMissingOptions(parseArguments(["volume-box"]), async () =>
+    Promise.resolve(""),
+  );
+  assert.equal(volumeOptions.workspace, false);
+});
+
 test("normalizes names accepted by Docker Compose", () => {
   assert.equal(normalizeProjectName("My Client Project!"), "my-client-project");
   assert.throws(() => normalizeProjectName("---"), CliError);
@@ -76,23 +104,40 @@ test("creates complete, isolated setups for multiple projects", async () => {
       name: string;
       workspaceFolder: string;
     };
-    const vscodeSettings = JSON.parse(
-      await readFile(join(alpha.targetDirectory, ".vscode/settings.json"), "utf8"),
-    ) as Record<string, unknown>;
 
     assert.match(alphaEnvironment, /^COMPOSE_PROJECT_NAME=alpha-project$/m);
-  assert.ok(alphaEnvironment.split("\n").includes(`TZ=${detectSystemTimezone()}`));
+    assert.ok(alphaEnvironment.split("\n").includes(`TZ=${detectSystemTimezone()}`));
+    assert.match(alphaEnvironment, /^DEVBOX_WORKSPACE_SOURCE="devbox_workspace"$/m);
     assert.match(betaEnvironment, /^COMPOSE_PROJECT_NAME=beta-project$/m);
     assert.match(compose, /source: devbox_home/);
+    assert.match(compose, /\$\{DEVBOX_WORKSPACE_SOURCE:-devbox_workspace\}:\/workspace/);
     assert.equal(devcontainer.name, "Node Devbox: alpha-project");
     assert.equal(devcontainer.workspaceFolder, "/workspace");
-    assert.deepEqual(devcontainer.customizations.vscode.settings["files.exclude"], {
-      ".devcontainer": true,
-      ".vscode": true,
-      ".env": true,
-      "docker-compose.yml": true,
-    });
-    assert.equal(vscodeSettings["files.exclude"], undefined);
+    assert.equal(devcontainer.customizations.vscode.settings["files.exclude"], undefined);
+    assert.equal(alpha.workspaceType, "volume");
+    assert.equal(alpha.workspaceSource, "devbox_workspace");
+  });
+});
+
+test("creates a separate host workspace when a bind mount is requested", async () => {
+  await withTemporaryDirectory(async (cwd) => {
+    const workspace = join(cwd, "source code");
+    const result = await createDevbox({ cwd, target: "devbox-config", workspace });
+    const environment = await readFile(join(result.targetDirectory, ".env"), "utf8");
+
+    assert.equal(result.workspaceType, "bind");
+    assert.equal(result.workspaceSource, workspace);
+    assert.equal((await stat(workspace)).isDirectory(), true);
+    assert.ok(environment.split("\n").includes(`DEVBOX_WORKSPACE_SOURCE=${JSON.stringify(workspace)}`));
+  });
+});
+
+test("rejects a workspace that contains the setup folder", async () => {
+  await withTemporaryDirectory(async (cwd) => {
+    await assert.rejects(
+      createDevbox({ cwd, target: "devbox-config", workspace: cwd }),
+      /workspace folder cannot contain the Devbox setup folder/,
+    );
   });
 });
 

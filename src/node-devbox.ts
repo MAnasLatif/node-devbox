@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 
 import { readFile } from "node:fs/promises";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
-import { CliError, createDevbox, parseArguments, usage } from "./scaffold.js";
+import {
+  CliError,
+  createDevbox,
+  parseArguments,
+  promptForMissingOptions,
+  usage,
+} from "./scaffold.js";
 
 interface PackageJson {
   version: string;
@@ -16,24 +23,49 @@ async function getVersion(): Promise<string> {
   return packageJson.version;
 }
 
-async function main(): Promise<void> {
-  const options = parseArguments(process.argv.slice(2));
+async function completeOptions(options: ReturnType<typeof parseArguments>) {
+  if (options.target && options.workspace !== undefined) {
+    return options;
+  }
 
-  if (options.help) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new CliError(
+      "Provide a folder name and either --workspace <path> or --no-workspace-mount when running non-interactively.",
+    );
+  }
+
+  const readline = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await promptForMissingOptions(options, (question) => readline.question(question));
+  } finally {
+    readline.close();
+  }
+}
+
+async function main(): Promise<void> {
+  const parsedOptions = parseArguments(process.argv.slice(2));
+
+  if (parsedOptions.help) {
     process.stdout.write(usage);
     return;
   }
 
-  if (options.version) {
+  if (parsedOptions.version) {
     process.stdout.write(`${await getVersion()}\n`);
     return;
   }
 
+  const options = await completeOptions(parsedOptions);
   const result = await createDevbox(options);
 
   process.stdout.write(`\nCreated Node Devbox: ${result.projectName}\n`);
   process.stdout.write(`Location: ${result.targetDirectory}\n`);
   process.stdout.write(`Timezone: ${result.timezone}\n`);
+  process.stdout.write(
+    result.workspaceType === "bind"
+      ? `Workspace: ${result.workspaceSource} -> /workspace\n`
+      : "Workspace: persistent Docker volume -> /workspace\n",
+  );
   process.stdout.write("Host ports:\n");
   process.stdout.write(`  ${result.ports[3000]} -> 3000\n`);
   process.stdout.write(`  ${result.ports[5173]} -> 5173\n`);

@@ -8,12 +8,14 @@
 Create named, isolated Node.js development environments with one command:
 
 ```bash
-npx node-devbox my-project
+npx node-devbox
 ```
 
-The command creates `my-project`, adds the complete Docker Compose and VS Code
-Dev Container setup, and assigns an explicit project name and stable host ports.
-No global npm installation, repository clone, or local image build is required.
+The interactive setup asks for a Devbox folder and whether to mount a host
+folder. The generated Docker Compose and VS Code files stay outside the
+container workspace, so a new `/workspace` is empty and ready for a repository
+clone. No global npm installation, repository clone, or local image build is
+required.
 
 The CLI and its tests are written in strict TypeScript. npm runs the compiled
 ES module from `dist/`, so users do not need TypeScript installed globally.
@@ -28,7 +30,7 @@ Requirements:
 - Docker Desktop or Docker Engine with Docker Compose v2
 
 ```bash
-npx node-devbox my-project
+npx node-devbox my-project --no-workspace-mount
 cd my-project
 docker compose up -d
 docker compose exec devbox dev-account
@@ -36,7 +38,12 @@ docker compose exec devbox bash
 ```
 
 `dev-account` opens GitHub's browser login, configures Git HTTPS credentials,
-and asks for the commit name and email used only by this devbox.
+and asks for the commit name and email used only by this devbox. Inside the
+shell, `/workspace` is initially empty:
+
+```bash
+git clone https://github.com/example/project.git .
+```
 
 Use `--start` to create and start it in one command:
 
@@ -57,15 +64,41 @@ npx node-devbox open-source-work
 Each generated folder has:
 
 - its own Docker Compose project name;
-- its own container and persistent `devbox_home` volume;
+- its own container, persistent home volume, and workspace storage;
 - its own GitHub CLI login, Git identity, SSH keys, and global npm packages;
 - stable project-specific host ports to avoid the usual `3000 already in use`
   conflict;
-- the selected host folder mounted at `/workspace`.
+- setup files that are not mounted at `/workspace`.
 
 Run `dev-account` once inside each project and choose the account intended for
 that project. Removing one setup does not remove another setup's account or
 files.
+
+## Workspace storage
+
+When options are omitted in an interactive terminal, the CLI asks:
+
+```text
+Devbox setup folder:
+Mount a host folder at /workspace? [y/N]
+Host workspace folder: # asked only after yes
+```
+
+Answer **no** to use an isolated Docker volume. A newly created volume gives
+the container an empty, writable `/workspace`. Answer **yes** to bind a host
+folder, making that folder's existing contents available at `/workspace`.
+
+For scripts and other non-interactive use, choose the mode explicitly:
+
+```bash
+node-devbox my-devbox --no-workspace-mount
+node-devbox my-devbox --workspace ../my-app
+```
+
+The host workspace cannot contain the Devbox setup folder because that would
+put the generated configuration back inside `/workspace`. A workspace inside
+the setup folder, such as the interactive default `my-devbox/workspace`, is
+safe because only that child folder is mounted.
 
 ## Generated files
 
@@ -86,8 +119,9 @@ my-project/
 | `.devcontainer/devcontainer.json` | VS Code Reopen in Container support |
 | `.vscode/settings.json` | Stops host Git config and credentials from being copied |
 
-The generated `.env` contains configuration only, not secrets, and can be
-committed with the project.
+The generated `.env` contains configuration only, not secrets. A bind-mode
+workspace path can be machine-specific, so review it before committing the
+setup folder.
 
 Existing source files are left alone. The CLI refuses to replace any generated
 file path unless `--force` is provided.
@@ -95,13 +129,16 @@ file path unless `--force` is provided.
 ## CLI options
 
 ```text
-Usage: node-devbox <folder-name> [options]
+Usage: node-devbox [folder-name] [options]
 
   --name <name>       Set the Docker Compose project name
   --port-3000 <port>  Set the host port mapped to container port 3000
   --port-5173 <port>  Set the host port mapped to container port 5173
   --port-8080 <port>  Set the host port mapped to container port 8080
   --timezone <zone>   Override the detected system timezone
+  --workspace <path> Mount a host folder at /workspace
+  --no-workspace-mount
+                      Store /workspace in a Docker volume
   --start             Start the devbox after creating it
   --force             Replace generated file paths
   -h, --help          Show help
@@ -111,8 +148,14 @@ Usage: node-devbox <folder-name> [options]
 Examples:
 
 ```bash
-# Add Node Devbox to the current folder
-npx node-devbox .
+# Prompt for the setup folder and workspace storage
+npx node-devbox
+
+# Use an empty persistent Docker volume
+npx node-devbox my-devbox --no-workspace-mount
+
+# Mount an existing application folder
+npx node-devbox my-devbox --workspace ../my-app
 
 # Choose an explicit Compose identity
 npx node-devbox client-app --name acme-client-app
@@ -133,7 +176,7 @@ npx node-devbox backend --timezone Asia/Karachi --start
 | Utilities | curl, wget, jq, ripgrep, zip/unzip, zsh, SSH client |
 | User | Non-root `developer` with passwordless sudo |
 | Architectures | Linux AMD64 and ARM64 |
-| Project path | Host project bind-mounted at `/workspace` |
+| Project path | Named volume or selected host folder mounted at `/workspace` |
 
 This is a development image. It is not intended for production workloads or
 for executing hostile code.
@@ -146,8 +189,10 @@ After generating a project:
 2. Open the generated folder in VS Code.
 3. Run **Dev Containers: Reopen in Container** from the Command Palette.
 
-VS Code opens `/workspace` as `developer`. The generated settings prevent Dev
-Containers from copying the host Git configuration and credential helper.
+VS Code opens `/workspace` as `developer`. Generated setup files remain in the
+host setup folder and are not present in the container workspace. The generated
+settings prevent Dev Containers from copying the host Git configuration and
+credential helper.
 
 ## Everyday commands
 
@@ -161,11 +206,12 @@ docker compose exec devbox gh auth status  # Check the GitHub account
 docker compose logs -f devbox              # Follow logs
 docker compose stop                        # Stop and keep state
 docker compose down                        # Remove container, keep account state
-docker compose down -v                     # Remove container and account state
+docker compose down -v                     # Remove container, account, and volume workspace
 ```
 
-Project source files stay on the host and are not deleted by
-`docker compose down -v`.
+With `--workspace`, project source files stay on the host and are not deleted
+by `docker compose down -v`. Without a host mount, the project lives in the
+`devbox_workspace` volume, and `docker compose down -v` permanently deletes it.
 
 Development servers must listen on `0.0.0.0` inside the container. The CLI
 prints the generated host mappings after setup. View them again with:
@@ -184,6 +230,7 @@ Edit the generated `.env` to change a setup:
 COMPOSE_PROJECT_NAME=my-project
 DEVBOX_HOSTNAME=my-project-devbox
 TZ=Asia/Karachi
+DEVBOX_WORKSPACE_SOURCE="devbox_workspace"
 DEVBOX_PORT_3000=24567
 DEVBOX_PORT_5173=34567
 DEVBOX_PORT_8080=44567
@@ -198,6 +245,12 @@ Set `DEVBOX_IMAGE` in `.env` to pin or replace the image:
 
 ```dotenv
 DEVBOX_IMAGE=ghcr.io/manaslatif/node-devbox:latest
+```
+
+To switch an existing setup to a host workspace, use an absolute path:
+
+```dotenv
+DEVBOX_WORKSPACE_SOURCE="/Users/example/projects/my-app"
 ```
 
 To add another port, extend the service's `ports` list in
@@ -226,8 +279,8 @@ curl -fsSLO https://raw.githubusercontent.com/MAnasLatif/node-devbox/main/docker
 docker compose up -d
 ```
 
-Manual setup uses the folder name for Compose isolation and the standard host
-ports unless an `.env` file overrides them.
+Manual setup uses the folder name for Compose isolation, a named workspace
+volume, and the standard host ports unless an `.env` file overrides them.
 
 ## Publishing
 
