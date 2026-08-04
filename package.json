@@ -1,0 +1,48 @@
+{
+  "name": "node-devbox",
+  "version": "1.0.0",
+  "description": "Create isolated Node.js development environments with Docker Compose.",
+  "type": "module",
+  "bin": {
+    "node-devbox": "bin/node-devbox.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "docker-compose.yml",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "check": "npm test && npm pack --dry-run",
+    "prepublishOnly": "npm test"
+  },
+  "engines": {
+    "node": ">=20.10"
+  },
+  "keywords": [
+    "node",
+    "docker",
+    "docker-compose",
+    "devcontainer",
+    "development-environment",
+    "github-cli"
+  ],
+  "author": {
+    "name": "M Anas Latif",
+    "url": "https://github.com/MAnasLatif"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MAnasLatif/node-devbox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MAnasLatif/node-devbox/issues"
+  },
+  "homepage": "https://github.com/MAnasLatif/node-devbox#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,14 +1,127 @@
 # Node Devbox
 
-[![Publish container image](https://github.com/MAnasLatif/node-devbox/actions/workflows/publish-image.yml/badge.svg)](https://github.com/MAnasLatif/node-devbox/actions/workflows/publish-image.yml)
+[![npm version](https://img.shields.io/npm/v/node-devbox.svg)](https://www.npmjs.com/package/node-devbox)
+[![CI](https://github.com/MAnasLatif/node-devbox/actions/workflows/ci.yml/badge.svg)](https://github.com/MAnasLatif/node-devbox/actions/workflows/ci.yml)
+[![Container](https://github.com/MAnasLatif/node-devbox/actions/workflows/publish-image.yml/badge.svg)](https://github.com/MAnasLatif/node-devbox/actions/workflows/publish-image.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A reusable Node.js development environment distributed as a multi-architecture
-container image. Copy one Compose file into any project; no clone or local image
-build is required.
+Create named, isolated Node.js development environments with one command:
 
-Image: `ghcr.io/manaslatif/node-devbox:latest`
+```bash
+npx node-devbox my-project
+```
 
-## Included
+The command creates `my-project`, adds the complete Docker Compose and VS Code
+Dev Container setup, and assigns an explicit project name and stable host ports.
+No global npm installation, repository clone, or local image build is required.
+
+Container image: `ghcr.io/manaslatif/node-devbox:latest`
+
+## Quick start
+
+Requirements:
+
+- Node.js 20.10 or newer to run the CLI
+- Docker Desktop or Docker Engine with Docker Compose v2
+
+```bash
+npx node-devbox my-project
+cd my-project
+docker compose up -d
+docker compose exec devbox dev-account
+docker compose exec devbox bash
+```
+
+`dev-account` opens GitHub's browser login, configures Git HTTPS credentials,
+and asks for the commit name and email used only by this devbox.
+
+Use `--start` to create and start it in one command:
+
+```bash
+npx node-devbox my-project --start
+```
+
+## Multiple projects and accounts
+
+Create as many environments as needed:
+
+```bash
+npx node-devbox personal-api
+npx node-devbox client-dashboard
+npx node-devbox open-source-work
+```
+
+Each generated folder has:
+
+- its own Docker Compose project name;
+- its own container and persistent `devbox_home` volume;
+- its own GitHub CLI login, Git identity, SSH keys, and global npm packages;
+- stable project-specific host ports to avoid the usual `3000 already in use`
+  conflict;
+- the selected host folder mounted at `/workspace`.
+
+Run `dev-account` once inside each project and choose the account intended for
+that project. Removing one setup does not remove another setup's account or
+files.
+
+## Generated files
+
+```text
+my-project/
+|-- .devcontainer/
+|   `-- devcontainer.json
+|-- .vscode/
+|   `-- settings.json
+|-- .env
+`-- docker-compose.yml
+```
+
+| File | Purpose |
+| --- | --- |
+| `.env` | Explicit project identity, hostname, timezone, and host ports |
+| `docker-compose.yml` | Public GHCR image, project mount, persistent home, and ports |
+| `.devcontainer/devcontainer.json` | VS Code Reopen in Container support |
+| `.vscode/settings.json` | Stops host Git config and credentials from being copied |
+
+The generated `.env` contains configuration only, not secrets, and can be
+committed with the project.
+
+Existing source files are left alone. The CLI refuses to replace any generated
+file path unless `--force` is provided.
+
+## CLI options
+
+```text
+Usage: node-devbox <folder-name> [options]
+
+  --name <name>       Set the Docker Compose project name
+  --port-3000 <port>  Set the host port mapped to container port 3000
+  --port-5173 <port>  Set the host port mapped to container port 5173
+  --port-8080 <port>  Set the host port mapped to container port 8080
+  --timezone <zone>   Set the container timezone (default: UTC)
+  --start             Start the devbox after creating it
+  --force             Replace generated file paths
+  -h, --help          Show help
+  -v, --version       Show the installed version
+```
+
+Examples:
+
+```bash
+# Add Node Devbox to the current folder
+npx node-devbox .
+
+# Choose an explicit Compose identity
+npx node-devbox client-app --name acme-client-app
+
+# Use conventional host ports instead of generated project-specific ports
+npx node-devbox demo --port-3000 3000 --port-5173 5173 --port-8080 8080
+
+# Set a timezone and start immediately
+npx node-devbox backend --timezone Asia/Karachi --start
+```
+
+## Included tools
 
 | Item | Details |
 | --- | --- |
@@ -17,141 +130,109 @@ Image: `ghcr.io/manaslatif/node-devbox:latest`
 | Utilities | curl, wget, jq, ripgrep, zip/unzip, zsh, SSH client |
 | User | Non-root `developer` with passwordless sudo |
 | Architectures | Linux AMD64 and ARM64 |
-| Project files | Current host folder mounted at `/workspace` |
-| Persistent state | GitHub login, Git config, SSH keys, shell state, and global npm packages |
+| Project path | Host project bind-mounted at `/workspace` |
 
-This is a development image. It is not intended to run production workloads.
-
-## Quick start
-
-Requirements: Docker Desktop or Docker Engine with Docker Compose v2.
-
-From any new or existing project folder:
-
-```bash
-curl -fsSLO https://raw.githubusercontent.com/MAnasLatif/node-devbox/main/docker-compose.yml
-docker compose up -d
-docker compose exec devbox bash
-```
-
-The first command downloads only the Compose file. `docker compose up` pulls the
-published image from GitHub Container Registry and mounts the current folder at
-`/workspace`.
-
-Compose uses the folder name as the project name. This gives each project its
-own container and persistent home volume. For folders with the same name, set a
-unique `COMPOSE_PROJECT_NAME` as shown under Configuration.
-
-## GitHub account
-
-Configure the GitHub identity used inside this devbox:
-
-```bash
-docker compose exec devbox dev-account
-```
-
-The helper opens GitHub's browser login, configures `gh` as Git's HTTPS
-credential helper, and asks for the commit name and email. Credentials and Git
-configuration remain in this project's Docker home volume.
-
-To keep a dedicated container account separate when using VS Code Dev
-Containers, add these settings to VS Code User Settings:
-
-```jsonc
-"dev.containers.copyGitConfig": false,
-"dev.containers.gitCredentialHelperConfigLocation": "none"
-```
-
-Verify the active identity inside the container:
-
-```bash
-gh auth status
-git config --global --get-regexp '^(user|credential)\.'
-```
+This is a development image. It is not intended for production workloads or
+for executing hostile code.
 
 ## VS Code
 
-For a project containing only the downloaded Compose file:
+After generating a project:
 
 1. Install the Dev Containers extension (`ms-vscode-remote.remote-containers`).
-2. Run `docker compose up -d`.
-3. Run **Dev Containers: Attach to Running Container...** from the Command Palette.
-4. Select the container ending in `-devbox-1`, then open `/workspace`.
+2. Open the generated folder in VS Code.
+3. Run **Dev Containers: Reopen in Container** from the Command Palette.
 
-When working from a clone of this repository, use **Dev Containers: Reopen in
-Container** instead; the included `.devcontainer/devcontainer.json` supplies the
-same configuration.
+VS Code opens `/workspace` as `developer`. The generated settings prevent Dev
+Containers from copying the host Git configuration and credential helper.
 
 ## Everyday commands
 
+Run these from the generated project folder:
+
 ```bash
-docker compose up -d                 # Start or recreate the devbox
-docker compose exec devbox bash      # Open a shell
-docker compose exec devbox node -v   # Check Node.js
-docker compose exec devbox gh status # Check GitHub CLI
-docker compose logs -f devbox        # Follow container logs
-docker compose stop                  # Stop and keep all state
-docker compose down                  # Remove container, keep home volume
+docker compose up -d                       # Start or recreate
+docker compose exec devbox bash            # Open a shell
+docker compose exec devbox node -v         # Check Node.js
+docker compose exec devbox gh auth status  # Check the GitHub account
+docker compose logs -f devbox              # Follow logs
+docker compose stop                        # Stop and keep state
+docker compose down                        # Remove container, keep account state
+docker compose down -v                     # Remove container and account state
 ```
 
-Development servers must listen on `0.0.0.0` inside the container to be
-reachable from the host. For example: `npm run dev -- --host 0.0.0.0`.
+Project source files stay on the host and are not deleted by
+`docker compose down -v`.
+
+Development servers must listen on `0.0.0.0` inside the container. The CLI
+prints the generated host mappings after setup. View them again with:
+
+```bash
+docker compose port devbox 3000
+docker compose port devbox 5173
+docker compose port devbox 8080
+```
 
 ## Configuration
 
-Defaults work without an `.env` file. Add one beside `docker-compose.yml` to
-override them:
+Edit the generated `.env` to change a setup:
 
 ```dotenv
-COMPOSE_PROJECT_NAME=my-project-dev
-TZ=Asia/Karachi
-DEVBOX_PORT_3000=3100
-DEVBOX_PORT_5173=5174
-DEVBOX_PORT_8080=8081
-DEVBOX_IMAGE=ghcr.io/manaslatif/node-devbox:latest
+COMPOSE_PROJECT_NAME=my-project
 DEVBOX_HOSTNAME=my-project-devbox
+TZ=UTC
+DEVBOX_PORT_3000=24567
+DEVBOX_PORT_5173=34567
+DEVBOX_PORT_8080=44567
 ```
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `COMPOSE_PROJECT_NAME` | Current folder name | Isolates container and volume names |
-| `TZ` | `UTC` | Container timezone |
-| `DEVBOX_IMAGE` | `ghcr.io/manaslatif/node-devbox:latest` | Image or pinned release tag |
-| `DEVBOX_HOSTNAME` | `devbox` | Container hostname |
-| `DEVBOX_PORT_3000` | `3000` | Host port mapped to container port 3000 |
-| `DEVBOX_PORT_5173` | `5173` | Host port mapped to container port 5173 |
-| `DEVBOX_PORT_8080` | `8080` | Host port mapped to container port 8080 |
+Set `DEVBOX_IMAGE` in `.env` to pin or replace the image:
 
-To add another port, extend the service's `ports` list in `docker-compose.yml`.
+```dotenv
+DEVBOX_IMAGE=ghcr.io/manaslatif/node-devbox:latest
+```
 
-## Updates and cleanup
+To add another port, extend the service's `ports` list in
+`docker-compose.yml`.
 
-Pull the newest image without losing the persisted home directory:
+## Updates
+
+Pull a newer image without losing the project-scoped account state:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-Delete the devbox and its login, Git configuration, SSH keys, and global
-packages:
+Run the current CLI with `--force` to refresh its generated files. Review and
+commit local configuration first because this replaces `.env`,
+`docker-compose.yml`, `.devcontainer/devcontainer.json`, and
+`.vscode/settings.json`.
+
+## Manual Compose setup
+
+The npm CLI is optional. To download only the generic Compose file:
 
 ```bash
-docker compose down -v
+curl -fsSLO https://raw.githubusercontent.com/MAnasLatif/node-devbox/main/docker-compose.yml
+docker compose up -d
 ```
 
-Project source files are bind-mounted from the host and are not deleted by this
-command.
+Manual setup uses the folder name for Compose isolation and the standard host
+ports unless an `.env` file overrides them.
 
-## Image publishing
+## Publishing
 
-The `Publish container image` GitHub Actions workflow builds AMD64 and ARM64
-images and publishes them to GHCR:
+GitHub Actions builds AMD64 and ARM64 images from `main` and publishes `main`
+and `latest` tags to GHCR. Version tags such as `v1.2.0` also publish immutable
+container version tags.
 
-- Pushes to `main` publish `main` and `latest`.
-- tags such as `v1.2.0` publish `v1.2.0`, `1.2.0`, and `1.2`.
-- Pull requests build the image without publishing it.
-- Manual runs are available through the Actions tab.
+GitHub releases publish matching package versions to npm using Trusted
+Publishing and provenance. Maintainer instructions are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-The workflow uses the repository's `GITHUB_TOKEN`; no registry secret is
-required. The GHCR package must be public for unauthenticated one-file setup.
+## Open source
+
+Node Devbox is available under the [MIT License](LICENSE). Contributions are
+welcome; read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
