@@ -268,6 +268,12 @@ function createDevcontainer(projectName: string): string {
             "terminal.integrated.defaultProfile.linux": "bash",
             "git.terminalAuthentication": false,
             "github.gitAuthentication": false,
+            "files.exclude": {
+              ".devcontainer": true,
+              ".vscode": true,
+              ".env": true,
+              "docker-compose.yml": true,
+            },
           },
           extensions: [
             "GitHub.vscode-pull-request-github",

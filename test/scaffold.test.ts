@@ -71,7 +71,14 @@ test("creates complete, isolated setups for multiple projects", async () => {
     const compose = await readFile(join(alpha.targetDirectory, "docker-compose.yml"), "utf8");
     const devcontainer = JSON.parse(
       await readFile(join(alpha.targetDirectory, ".devcontainer/devcontainer.json"), "utf8"),
-    ) as { name: string; workspaceFolder: string };
+    ) as {
+      customizations: { vscode: { settings: Record<string, unknown> } };
+      name: string;
+      workspaceFolder: string;
+    };
+    const vscodeSettings = JSON.parse(
+      await readFile(join(alpha.targetDirectory, ".vscode/settings.json"), "utf8"),
+    ) as Record<string, unknown>;
 
     assert.match(alphaEnvironment, /^COMPOSE_PROJECT_NAME=alpha-project$/m);
   assert.ok(alphaEnvironment.split("\n").includes(`TZ=${detectSystemTimezone()}`));
@@ -79,6 +86,13 @@ test("creates complete, isolated setups for multiple projects", async () => {
     assert.match(compose, /source: devbox_home/);
     assert.equal(devcontainer.name, "Node Devbox: alpha-project");
     assert.equal(devcontainer.workspaceFolder, "/workspace");
+    assert.deepEqual(devcontainer.customizations.vscode.settings["files.exclude"], {
+      ".devcontainer": true,
+      ".vscode": true,
+      ".env": true,
+      "docker-compose.yml": true,
+    });
+    assert.equal(vscodeSettings["files.exclude"], undefined);
   });
 });
 
