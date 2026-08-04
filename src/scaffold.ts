@@ -5,6 +5,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const supportedPorts = [3000, 5173, 8080] as const;
+const timezonePattern = /^[A-Za-z0-9_+/-]+$/;
 
 export type ContainerPort = (typeof supportedPorts)[number];
 export type PortMap = Record<ContainerPort, number>;
@@ -36,6 +37,7 @@ export interface CreateDevboxResult {
   projectName: string;
   relativeTarget: string;
   targetDirectory: string;
+  timezone: string;
 }
 
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -58,7 +60,7 @@ Options:
   --port-3000 <port>  Set the host port mapped to container port 3000
   --port-5173 <port>  Set the host port mapped to container port 5173
   --port-8080 <port>  Set the host port mapped to container port 8080
-  --timezone <zone>   Set the container timezone (default: UTC)
+  --timezone <zone>   Override the detected system timezone
   --start             Start the devbox after creating it
   --force             Replace files previously managed by Node Devbox
   -h, --help          Show help
@@ -78,7 +80,10 @@ function takeValue(argumentsList: readonly string[], index: number, option: stri
   return value;
 }
 
-export function parseArguments(argumentsList: readonly string[]): ParsedArguments {
+export function parseArguments(
+  argumentsList: readonly string[],
+  systemTimezone = detectSystemTimezone(),
+): ParsedArguments {
   const options: ParsedArguments = {
     cwd: process.cwd(),
     force: false,
@@ -86,7 +91,7 @@ export function parseArguments(argumentsList: readonly string[]): ParsedArgument
     ports: {},
     start: false,
     target: "",
-    timezone: "UTC",
+    timezone: validateTimezone(systemTimezone),
     version: false,
   };
   const positional: string[] = [];
@@ -184,10 +189,22 @@ function validatePort(value: number | string, option: string): number {
 }
 
 function validateTimezone(value: string): string {
-  if (!/^[A-Za-z0-9_+/-]+$/.test(value)) {
+  if (!timezonePattern.test(value)) {
     throw new CliError("The timezone contains unsupported characters.");
   }
   return value;
+}
+
+export function detectSystemTimezone(
+  resolveTimezone: () => string | undefined = () =>
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+): string {
+  try {
+    const timezone = resolveTimezone();
+    return timezone && timezonePattern.test(timezone) ? timezone : "UTC";
+  } catch {
+    return "UTC";
+  }
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -325,7 +342,7 @@ export async function createDevbox(options: CreateDevboxOptions): Promise<Create
     throw new CliError("Host ports must be different from each other.");
   }
 
-  const timezone = validateTimezone(options.timezone ?? "UTC");
+  const timezone = validateTimezone(options.timezone ?? detectSystemTimezone());
   const force = options.force ?? false;
   await prepareTarget(targetDirectory, force);
 
@@ -360,5 +377,6 @@ export async function createDevbox(options: CreateDevboxOptions): Promise<Create
     projectName,
     relativeTarget: isAbsolute(options.target) ? targetDirectory : relativeTarget,
     targetDirectory,
+    timezone,
   };
 }

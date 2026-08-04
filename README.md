@@ -81,7 +81,7 @@ my-project/
 
 | File | Purpose |
 | --- | --- |
-| `.env` | Explicit project identity, hostname, timezone, and host ports |
+| `.env` | Explicit project identity, hostname, detected system timezone, and host ports |
 | `docker-compose.yml` | Public GHCR image, project mount, persistent home, and ports |
 | `.devcontainer/devcontainer.json` | VS Code Reopen in Container support |
 | `.vscode/settings.json` | Stops host Git config and credentials from being copied |
@@ -101,7 +101,7 @@ Usage: node-devbox <folder-name> [options]
   --port-3000 <port>  Set the host port mapped to container port 3000
   --port-5173 <port>  Set the host port mapped to container port 5173
   --port-8080 <port>  Set the host port mapped to container port 8080
-  --timezone <zone>   Set the container timezone (default: UTC)
+  --timezone <zone>   Override the detected system timezone
   --start             Start the devbox after creating it
   --force             Replace generated file paths
   -h, --help          Show help
@@ -183,11 +183,16 @@ Edit the generated `.env` to change a setup:
 ```dotenv
 COMPOSE_PROJECT_NAME=my-project
 DEVBOX_HOSTNAME=my-project-devbox
-TZ=UTC
+TZ=Asia/Karachi
 DEVBOX_PORT_3000=24567
 DEVBOX_PORT_5173=34567
 DEVBOX_PORT_8080=44567
 ```
+
+By default, the CLI reads the host timezone from Node.js `Intl` and writes it to
+`TZ`. For example, a system set to `Asia/Karachi` generates
+`TZ=Asia/Karachi`. Use `--timezone` to override it. If the host timezone cannot
+be detected, the safe fallback is `UTC`.
 
 Set `DEVBOX_IMAGE` in `.env` to pin or replace the image:
 

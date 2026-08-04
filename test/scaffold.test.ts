@@ -7,6 +7,7 @@ import { test } from "node:test";
 import {
   CliError,
   createDevbox,
+  detectSystemTimezone,
   derivePorts,
   normalizeProjectName,
   parseArguments,
@@ -21,18 +22,33 @@ async function withTemporaryDirectory(callback: (directory: string) => Promise<v
   }
 }
 
-test("parses the documented command", () => {
-  assert.deepEqual(parseArguments(["my-app", "--name", "client", "--port-3000", "3000"]), {
-    cwd: process.cwd(),
-    force: false,
-    help: false,
-    name: "client",
-    ports: { 3000: "3000" },
-    start: false,
-    target: "my-app",
-    timezone: "UTC",
-    version: false,
-  });
+test("parses the documented command with the detected system timezone", () => {
+  assert.deepEqual(
+    parseArguments(["my-app", "--name", "client", "--port-3000", "3000"], "Asia/Karachi"),
+    {
+      cwd: process.cwd(),
+      force: false,
+      help: false,
+      name: "client",
+      ports: { 3000: "3000" },
+      start: false,
+      target: "my-app",
+      timezone: "Asia/Karachi",
+      version: false,
+    },
+  );
+});
+
+test("detects the system timezone and safely falls back to UTC", () => {
+  assert.equal(detectSystemTimezone(() => "Europe/London"), "Europe/London");
+  assert.equal(detectSystemTimezone(() => ""), "UTC");
+  assert.equal(detectSystemTimezone(() => "Invalid Timezone"), "UTC");
+  assert.equal(
+    detectSystemTimezone(() => {
+      throw new Error("Intl unavailable");
+    }),
+    "UTC",
+  );
 });
 
 test("normalizes names accepted by Docker Compose", () => {
@@ -47,6 +63,7 @@ test("creates complete, isolated setups for multiple projects", async () => {
 
     assert.equal(alpha.projectName, "alpha-project");
     assert.equal(beta.projectName, "beta-project");
+    assert.equal(alpha.timezone, detectSystemTimezone());
     assert.notDeepEqual(alpha.ports, beta.ports);
 
     const alphaEnvironment = await readFile(join(alpha.targetDirectory, ".env"), "utf8");
@@ -57,6 +74,7 @@ test("creates complete, isolated setups for multiple projects", async () => {
     ) as { name: string; workspaceFolder: string };
 
     assert.match(alphaEnvironment, /^COMPOSE_PROJECT_NAME=alpha-project$/m);
+  assert.ok(alphaEnvironment.split("\n").includes(`TZ=${detectSystemTimezone()}`));
     assert.match(betaEnvironment, /^COMPOSE_PROJECT_NAME=beta-project$/m);
     assert.match(compose, /source: devbox_home/);
     assert.equal(devcontainer.name, "Node Devbox: alpha-project");
@@ -78,6 +96,7 @@ test("uses stable per-project ports and accepts explicit overrides", async () =>
 
     assert.match(environment, /^TZ=Asia\/Karachi$/m);
     assert.match(environment, /^DEVBOX_PORT_3000=3000$/m);
+    assert.equal(result.timezone, "Asia/Karachi");
   });
 });
 

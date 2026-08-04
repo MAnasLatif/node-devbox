@@ -33,6 +33,7 @@ async function main(): Promise<void> {
 
   process.stdout.write(`\nCreated Node Devbox: ${result.projectName}\n`);
   process.stdout.write(`Location: ${result.targetDirectory}\n`);
+  process.stdout.write(`Timezone: ${result.timezone}\n`);
   process.stdout.write("Host ports:\n");
   process.stdout.write(`  ${result.ports[3000]} -> 3000\n`);
   process.stdout.write(`  ${result.ports[5173]} -> 5173\n`);
