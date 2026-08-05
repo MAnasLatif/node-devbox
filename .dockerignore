@@ -2,6 +2,8 @@
 .github
 .devcontainer
 .vscode
+.editorconfig
+.gitattributes
 dist
 src
 test
@@ -10,6 +12,7 @@ package*.json
 tsconfig.json
 *.md
 docker-compose.yml
+.dockerignore
 .gitignore
 LICENSE
 .DS_Store
