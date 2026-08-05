@@ -1,7 +1,7 @@
 {
   "name": "node-devbox",
   "version": "1.1.1",
-  "description": "Create isolated Node.js development environments with Docker Compose.",
+  "description": "Create isolated Node.js environments with project-scoped Git and GitHub identities.",
   "type": "module",
   "bin": {
     "node-devbox": "dist/src/node-devbox.js"
@@ -11,6 +11,7 @@
     "src",
     "tsconfig.json",
     "docker-compose.yml",
+    "CHANGELOG.md",
     "LICENSE",
     "README.md"
   ],
@@ -30,7 +31,10 @@
     "docker-compose",
     "devcontainer",
     "development-environment",
-    "github-cli"
+    "git",
+    "github",
+    "github-cli",
+    "multiple-accounts"
   ],
   "author": {
     "name": "M Anas Latif",
