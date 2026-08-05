@@ -8,12 +8,17 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -43,3 +48,14 @@ jobs:
 
       - name: Validate Docker Compose
         run: docker compose config --quiet
+
+      - name: Validate contributor Dev Container
+        run: |
+          node -e "JSON.parse(require('node:fs').readFileSync('.devcontainer/devcontainer.json', 'utf8'))"
+          docker compose \
+            -f docker-compose.yml \
+            -f .devcontainer/docker-compose.yml \
+            config --quiet
+
+      - name: Validate account setup script
+        run: bash -n scripts/dev-account.sh
