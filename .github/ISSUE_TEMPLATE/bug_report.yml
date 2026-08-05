@@ -1,0 +1,97 @@
+name: Bug report
+description: Report a reproducible defect in Node Devbox
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Node Devbox. Search existing issues first and remove credentials, private repository names, and sensitive paths from all examples and logs.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      description: Which part of Node Devbox is failing?
+      options:
+        - npm CLI and generated files
+        - Container image
+        - dev-account command
+        - VS Code Dev Container
+        - Docker Compose runtime
+        - Documentation
+        - Other or unknown
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Node Devbox version or image tag
+      description: Include the npm package version, container tag, or commit SHA.
+      placeholder: "1.1.1 or ghcr.io/manaslatif/node-devbox:1.1.1"
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Host environment
+      description: Include the operating system, version, and architecture.
+      placeholder: "macOS 15 arm64, Ubuntu 24.04 amd64, or Windows 11 with WSL2"
+    validations:
+      required: true
+  - type: input
+    id: runtimes
+    attributes:
+      label: Node.js, Docker, and Compose versions
+      placeholder: "Node.js 24.4.1; Docker 28.3.2; Compose 2.38.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: workspace
+    attributes:
+      label: Workspace mode
+      options:
+        - Docker volume (--no-workspace-mount)
+        - Host bind mount (--workspace)
+        - Not applicable or unknown
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest exact sequence of commands that reproduces the problem.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste only relevant, redacted output. This field is formatted as shell output.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and did not find the same report.
+          required: true
+        - label: I reproduced this with the latest applicable release.
+          required: true
+        - label: I removed credentials and private information from this report.
+          required: true

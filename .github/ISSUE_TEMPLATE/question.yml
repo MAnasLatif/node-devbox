@@ -1,0 +1,40 @@
+name: Usage question
+description: Ask for help with a Node Devbox-specific setup or workflow
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read SUPPORT.md and search existing issues before asking. General Docker, Git, GitHub, Node.js, and VS Code questions may be redirected to the relevant project.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What are you trying to accomplish with Node Devbox?
+    validations:
+      required: true
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What have you tried?
+      description: Include exact commands, results, and documentation you followed.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the Node Devbox version, host OS, Node.js, Docker, and Compose versions when relevant.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I read SUPPORT.md and searched existing issues.
+          required: true
+        - label: This question is specific to Node Devbox.
+          required: true
+        - label: I removed credentials and private information.
+          required: true
