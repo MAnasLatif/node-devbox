@@ -1,6 +1,9 @@
 {
     "name": "Node Devbox",
-    "dockerComposeFile": "../docker-compose.yml",
+    "dockerComposeFile": [
+        "../docker-compose.yml",
+        "docker-compose.yml"
+    ],
     "service": "devbox",
     "workspaceFolder": "/workspace",
     "remoteUser": "developer",

@@ -1,0 +1,6 @@
+services:
+  devbox:
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
